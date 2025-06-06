@@ -1,0 +1,78 @@
+﻿Id,Category,Title,Recruitment_period,Education_period,Date,Quota,Institution,Address,Tel,Detail,Fee,Post
+1,동구,요가,2025.02.12 09시 00분 ~ 2025.10.31 23시 00분,2025-03-04 ~ 2025-11-29,"화,목 15:00~16:00",19 / 50 명,생활체육교육,주민행복센터 3층 대강당,032-770-6124,https://www.icdonggu.go.kr/main/community/educate/sports.jsp?acptrun=y#,무료,
+2,동구,줌바댄스,2025.02.12 09시 00분 ~ 2025.10.31 23시 00분,2025-03-04 ~ 2025-11-29,"화,목 14:00~15:00",19 / 50 명,생활체육교육,주민행복센터 3층 대강당,032-770-6124,https://www.icdonggu.go.kr/main/community/educate/sports.jsp?acptrun=y#,무료,
+3,동구,그라운드 골프,2025.02.12 09시 00분 ~ 2025.10.31 23시 00분,2025-03-04 ~ 2025-11-29,"화,목 14:00~16:00",17 / 40 명,생활체육교육,송현근린공원 인라인스케이트장,032-770-6124,https://www.icdonggu.go.kr/main/community/educate/sports.jsp?acptrun=y#,무료,
+4,동구,실전투자 부동산 경매,2025.04.14 09시 00분 ~ 2025.04.30 18시 00분,만 19세 부터 ~ 99세 까지,월 19:00~20:50,6 / 12 명,만석동,만석동 2층 동아리방,032-770-5765,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"20,000원",
+5,동구,라인댄스,2025.04.14 09시 00분 ~ 2025.04.30 18시 00분,만 13세 부터 ~ 99세 까지,"월,수 11:00~11:50",13 / 16 명,만석동,만석동 2층 동아리방,032-770-5765,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"20,000원",
+6,동구,어린이 영어교실(중급),2025.04.14 09시 00분 ~ 2025.04.30 18시 00분,만 7세 부터 ~ 14세 까지,수 16:00~17:50,7 / 12 명,만석동,만석동 2층 동아리방,032-770-5765,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"20,000원",
+7,동구,[25년 2분기] S라인 요가,2025.03.20 00시 00분 ~ 2025.03.31 23시 00분,만 100세 이하,"월,수,금 오전 9시00분 ~ 오전 10시00분",15 / 16 명,송림6동,송림6동 행정복지센터 별관 2층,032-770-5943,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"30,000원",
+8,동구,[25년 2분기] 라인댄스 초급반,2025.03.20 00시 00분 ~ 2025.03.31 23시 00분,만 100세 이하,"월,수,금 오전 10시 ~ 오전 11시",12 / 15 명,송림6동,송림6동 행정복지센터 별관 2층,032-770-5943,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"30,000원",
+9,동구,[25년 2분기] 라인댄스 중급반,2025.03.20 00시 00분 ~ 2025.03.31 23시 00분,만 100세 이하,"월,수,금 오전 11시 ~ 오후 12시",17 / 17 명,송림6동,송림6동 행정복지센터 별관 2층,032-770-5943,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"30,000원",
+10,동구,[25년 2분기] SNPE 바른자세 운동,2025.03.20 00시 00분 ~ 2025.03.31 23시 00분,만 100세 이하,"월,수,금 오후 2시00분 ~ 오후 3시00분",7 / 15 명,송림6동,송림6동 행정복지센터 별관 2층,032-770-5943,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"30,000원",
+11,동구,[25년 2분기] 신나는 댄스,2025.03.20 00시 00분 ~ 2025.03.31 23시 00분,만 100세 이하,"월,수 19:00~20:00",12 / 19 명,송림6동,송림6동 행정복지센터 별관2층,032-770-5943,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"30,000원",
+12,동구,[25년 2분기] 얼쑤!난타,2025.03.21 00시 00분 ~ 2025.03.31 23시 00분,만 100세 이하,화 19:00 ~ 21:00,15 / 15 명,송림6동,송림6동 행정복지센터 별관2층,032-770-5943,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"30,000원",
+13,동구,[25년 2분기] 기타교실,2025.03.21 00시 00분 ~ 2025.03.31 23시 00분,만 100세 이하,수 오후 1시 ~ 3시,6 / 10 명,송림6동,송림6동 행정복지센터 별관3층,032-770-5943,https://www.icdonggu.go.kr/main/community/educate/autonomy.jsp?acptrun=y#,"30,000원",
+14,동구,요가교실(저녁),2025.03.17 09시 00분 ~ 2025.03.31 18시 00분,만 13세 부터 ~ 99세 까지,"월,수 18:30~19:20",18 / 18 명,만석동,만석동 행정복지센터 2층 다목적홀,032-770-5765,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,"30,000원",
+15,동구,체력단련실,2025.03.17 09시 00분 ~ 2025.06.30 18시 00분,2025-04-01 ~ 2025-06-30,"미지정 30,000원",20 / 150 명,화수1·화평동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료",
+16,동구,필라테스(2025-2),2025.03.24 09시 00분 ~ 2025.03.24 23시 00분,만 99세 이하,"월,금 10:00~10:50",19 / 20 명,송현1·2동,송현1.2동 청사 지하1층 프로그램실,032-770-5826,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,무료,
+17,동구,체력단련실,2025.03.26 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",239 / 300 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+18,동구,라인댄스,2025.03.12 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",15 / 15 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+19,동구,캘리그라피(초급),2025.03.19 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",7 / 15 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+20,동구,노래교실,2025.03.12 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",18 / 30 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+21,동구,사교댄스(초급),2025.03.19 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",30 / 30 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+22,동구,초등발레,2025.03.12 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",7 / 12 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+23,동구,필라테스,2025.03.19 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",15 / 15 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=3#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+24,동구,주간요가,2025.03.19 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",8 / 15 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=4#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+25,동구,야간요가2,2025.03.12 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",15 / 15 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=4#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+26,동구,야간요가1,2025.03.12 09시 00분 ~ 2025.05.31 17시 00분,2025-04-01 ~ 2025-06-30,"미지정 15,000원",15 / 15 명,송림3·5동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=4#,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+차상위 :  무료",
+27,동구,체력단련실,없음,월~금 09시~21시 / 토 09시~12시, 2층 체력단련실,0 / 100 명,금창동,Not found,Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=4#,Not found,
+28,동구,요가,2025.03.17 00시 00분 ~ 2025.03.21 23시 00분,없음,Not found,5 / 20 명,송현3동,"국가유공자 :  무료
+기초생활수급자 :  무료
+장애인 :  무료
+한부모가족 :  무료
+의사상자 :  무료",Not found,https://www.icdonggu.go.kr/main/program/programInfoList.do?prgmdiv=dong&acptrun=y&pgno=4#,11:10~13:10,
+29,동구,동구 이모작 신직업 찾기 'career up+',2025.03.04 09시 00분 ~ 2025.06.30 23시 00분,2025-04-04 ~ 2025-06-30,금 14:00~17:00,9 / 15 명,인생이모작지원센터,동구 인생이모작지원센터 교육장(청본이룸터 1층,032-777-4064~0,https://www.icdonggu.go.kr/main/community/educate/double.jsp?acptrun=y#,무료,
+30,동구,(원데이)지구와 우리를 위한 건강비건요리 만들기,2025.03.04 09시 00분 ~ 2025.05.31 23시 00분,2025-06-04 ~ 2025-06-04,수 14:00~16:00,5 / 15 명,인생이모작지원센터,동구 인생이모작지원센터 교육장(청본이룸터 1층,032-777-4064~0,https://www.icdonggu.go.kr/main/community/educate/double.jsp?acptrun=y#,무료,
