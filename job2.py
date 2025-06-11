@@ -1306,7 +1306,7 @@ class WorkGoKrCrawler:
 # Run the crawler
 if __name__ == "__main__":
     # The URL for job listings
-    url = 'https://www.work.go.kr/empInfo/themeEmp/themeEmpInfoSrchList.do?occupation=&currentUri=%2FempInfo%2FthemeEmp%2FthemeEmpInfoSrchList.do&webIsOut=&resultCnt=10&thmaHrplCd=F00030&notSrcKeyword=&isEmptyHeader=&_csrf=09e3fcaf-048d-4109-85af-a340a0c94e73&currntPageNo=1&listCookieInfo=DTL&isChkLocCall=&pageIndex=1&selTheme=F00030&sortField=DATE&moerButtonYn=&themeListidx=20&keyword=&region=11000%2C28000%2C41000&sortOrderBy=DESC'
+    url = 'https://www.work.go.kr/empInfo/themeEmp/themeEmpInfoSrchList.do?occupation=&currentUri=%2FempInfo%2FthemeEmp%2FthemeEmpInfoSrchList.do&webIsOut=&resultCnt=10&thmaHrplCd=F00030&notSrcKeyword=&isEmptyHeader=&_csrf=ff8a820a-c63c-4752-b830-ba60405a5257&currntPageNo=1&listCookieInfo=DTL&isChkLocCall=&pageIndex=1&selTheme=F00030&sortField=DATE&moerButtonYn=&themeListidx=20&keyword=&region=26000&sortOrderBy=DESC'
     
     # Create and run the crawler - set headless=False to see the browser in action
     crawler = WorkGoKrCrawler(headless=False)

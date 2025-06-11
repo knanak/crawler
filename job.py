@@ -113,6 +113,16 @@ class WorkGoKrCrawler:
                     # Get link element for navigation
                     link_element = link
                     
+                    # Extract the href URL and add it to Detail field
+                    try:
+                        href_url = link_element.get_attribute('href')
+                        if href_url:
+                            self.job_data["Detail"] = href_url
+                            print(f"Added Detail URL: {href_url}")
+                    except Exception as e:
+                        print(f"Error getting href attribute: {e}")
+                        self.job_data["Detail"] = "URL not found"
+                    
                     # Extract the list number from the list_selector
                     list_num = list_selector.replace('#list', '')
                     
@@ -220,7 +230,8 @@ class WorkGoKrCrawler:
             "Job Description": "Not found",
             "ApplicationMethod": "Not found",
             "ApplicationType": "Not found",
-            "document": "Not found"
+            "document": "Not found",
+            "Detail": "Not found"
         }
             
     def extract_job_details(self):
@@ -774,36 +785,7 @@ class WorkGoKrCrawler:
 
     def go_to_next_page(self, current_button_index):
         """Navigate to the next page using the specified button index or next control button"""
-        try: #frm > div.nav_wrp > nav > a.control.next
-   
-                
-            # if current_button_index == 12:  # a:nth-child(12) corresponds to page 10
-            #     print("On page 10, need to click next pagination set button...")
-            #     next_control_selector = "#frm > div.nav_wrp > nav > a.control.next"
-            #     next_control = self.driver.find_element(By.CSS_SELECTOR, next_control_selector)
-            #     time.sleep(0.5)
-            #     next_control.click()
-            #     print("Clicked 'next' control button to move to next page set (pages 11-20)")
-            #     time.sleep(3)  # Wait for page to load
-                
-            #     # After clicking "next", we should be on page 11 which is button 4 in the new set
-            #     self.checkpoint["current_page_button"] = 4
-                
-                # if "disabled" not in next_control.get_attribute("class").split():
-                #     # Click the next button to move to the next set of pages
-                #     self.driver.execute_script("arguments[0].scrollIntoView(true);", next_control)
-                #     time.sleep(0.5)
-                #     next_control.click()
-                #     print("Clicked 'next' control button to move to next page set (pages 11-20)")
-                #     time.sleep(3)  # Wait for page to load
-                    
-                #     # After clicking "next", we should be on page 11 which is button 4 in the new set
-                #     self.checkpoint["current_page_button"] = 4
-                #     return True
-                # else:
-                #     print("Next control button is disabled - reached the end")
-                #     return False
-            
+        try:
             # For non-page-10 situations, use the numbered page buttons
             page_button_selector = f"#frm > div.nav_wrp > nav > a:nth-child({current_button_index})"
             print(f"Looking for page button: {page_button_selector}")
@@ -815,46 +797,8 @@ class WorkGoKrCrawler:
                 print(f"Clicked page button #{current_button_index} (page {button_text})")
                 time.sleep(3)  # Wait for page to load
                 
-                # # Check if the button is clickable
-                # if page_button.is_displayed() and page_button.is_enabled():
-                #     # Scroll to make sure it's visible
-                #     self.driver.execute_script("arguments[0].scrollIntoView(true);", page_button)
-                #     time.sleep(0.5)
-                    
-                #     # Click the button
-                #     page_button.click()
-                #     print(f"Clicked page button #{current_button_index} (page {button_text})")
-                #     time.sleep(3)  # Wait for page to load
-                #     return True
-                # else:
-                #     print(f"Page button #{current_button_index} is not clickable")
-                #     return False
             except Exception as button_error:
                 print(f"Error finding or clicking page button #{current_button_index}: {button_error}")
-                
-                # Try JavaScript click as fallback
-                # try:
-                #     print("Trying JavaScript click as fallback")
-                #     button = self.driver.find_element(By.CSS_SELECTOR, page_button_selector)
-                #     self.driver.execute_script("arguments[0].click();", button)
-                #     print(f"Clicked page button #{current_button_index} using JavaScript")
-                #     time.sleep(3)
-                #     return True
-                # except:
-                #     print("JavaScript click also failed")
-                    
-                # As a last resort, try the "next" button
-                # try:
-                #     next_button = self.driver.find_element(By.CSS_SELECTOR, "#frm > div.nav_wrp > nav > a.control.next")
-                #     next_button.click()
-                #     print("Used 'next' control as fallback")
-                #     time.sleep(3)
-                #     # Reset button index after clicking next
-                #     self.checkpoint["current_page_button"] = 4
-                #     return True
-                # except:
-                #     print("All pagination attempts failed")
-                #     return False
                 
         except Exception as e:
             print(f"Error navigating to next page: {e}")
@@ -961,39 +905,6 @@ class WorkGoKrCrawler:
                         # The go_to_next_page function now handles resetting the button index when needed
                     if current_page_button != 12:  # If we weren't on page 10
                         current_page_button += 1
-               
-                        
-                # If we've finished all lists and haven't navigated to a new page yet
-                # if list_index == 9 and not (page_count % 10 == 0 and list_config["selector"] == "#list10"):
-                #     # Reset the list index for the next page
-                #     start_list_index = 0
-                    
-                #     # Navigate to the next page using standard navigation for non-multiple-of-10 pages
-                #     try:
-                #         # Calculate the next button index
-                #         next_button_index = current_page_button + 1
-                #         page_button_selector = f"#frm > div.nav_wrp > nav > a:nth-child({next_button_index})"
-                #         page_button = self.driver.find_element(By.CSS_SELECTOR, page_button_selector)
-                #         self.driver.execute_script("arguments[0].scrollIntoView(true);", page_button)
-                #         time.sleep(0.5)
-                        
-                #         # Use JavaScript click for more reliability
-                #         self.driver.execute_script("arguments[0].click();", page_button)
-                #         print(f"Clicked button to move from page {page_count} to page {page_count+1}")
-                #         time.sleep(3)
-                        
-                #         page_count += 1
-                #         current_page_button = next_button_index
-                        
-                #         # Update checkpoint
-                #         self.checkpoint["current_page"] = page_count
-                #         self.checkpoint["current_page_button"] = current_page_button
-                #         self.checkpoint["current_list_index"] = start_list_index
-                #         self.save_checkpoint()
-                #     except Exception as e:
-                #         print(f"Error navigating from page {page_count} to page {page_count+1}: {e}")
-                #         print("Reached the last page or no more pages to scrape")
-                #         
                 
             # Save the final collected job data
             self.save_to_csv("job_data.csv")
@@ -1024,10 +935,7 @@ class WorkGoKrCrawler:
 # Run the crawler
 if __name__ == "__main__":
     # The URL for job listings
-    url = 'https://www.work.go.kr/empInfo/themeEmp/themeEmpInfoSrchList.do?occupation=&currentUri=%2FempInfo%2FthemeEmp%2FthemeEmpInfoSrchList.do&webIsOut=&resultCnt=10&thmaHrplCd=F00030&notSrcKeyword=&isEmptyHeader=&_csrf=098aff9b-05fa-4e36-afe5-4366bdd690ec&currntPageNo=1&listCookieInfo=DTL&isChkLocCall=&pageIndex=1&selTheme=F00030&sortField=DATE&moerButtonYn=&themeListidx=20&keyword=&region=41000&sortOrderBy=DESC'
-    
+    url = 'https://www.work.go.kr/empInfo/themeEmp/themeEmpInfoSrchList.do?occupation=&currentUri=%2FempInfo%2FthemeEmp%2FthemeEmpInfoSrchList.do&webIsOut=&resultCnt=10&thmaHrplCd=F00030&notSrcKeyword=&isEmptyHeader=&_csrf=a8628dad-a7f1-4ffe-9e6e-f9e33632456a&currntPageNo=25&listCookieInfo=DTL&isChkLocCall=&pageIndex=1&selTheme=F00030&sortField=DATE&moerButtonYn=&themeListidx=20&keyword=&region=47000&sortOrderBy=DESC'
     # Create and run the crawler - set headless=False to see the browser in action
     crawler = WorkGoKrCrawler(headless=False)
     crawler.run(url, max_pages=100)  # Crawl up to 30 pages
-
-    
