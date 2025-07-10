@@ -10,19 +10,16 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 import re
 import os
 import json
+from datetime import datetime
+from urllib.parse import unquote, quote
 
 class WorkGoKrCrawler:
     def __init__(self, headless=True, checkpoint_file="crawler_checkpoint.json"):
-                # Chrome 옵션 설정
+        # Chrome 옵션 설정
         self.chrome_options = Options()
         
-        # 인코그니토 모드 사용 (user-data-dir 대신)
+        # 인코그니토 모드 사용
         self.chrome_options.add_argument('--incognito')
-        self.chrome_options.add_argument('--disable-save-password-bubble')
-        self.chrome_options.add_experimental_option("prefs", {
-            "profile.default_content_setting_values.cookies": 2,  # 쿠키 차단
-            "profile.block_third_party_cookies": True
-        })
         
         if headless:
             self.chrome_options.add_argument('--headless')
@@ -40,9 +37,9 @@ class WorkGoKrCrawler:
         self.chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
         self.chrome_options.add_experimental_option('useAutomationExtension', False)
         
-        # 로그 레벨 설정으로 불필요한 메시지 줄이기
+        # 로그 레벨 설정
         self.chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
-        self.chrome_options.add_argument('--log-level=3')  # Fatal 로그만 표시
+        self.chrome_options.add_argument('--log-level=3')
         
         # Chrome 드라이버 초기화
         try:
@@ -54,904 +51,772 @@ class WorkGoKrCrawler:
             print(f"Chrome 초기화 실패: {e}")
             raise
 
-        # Global storage for job data with the new structure
+        # 수집할 데이터 구조 (새로운 구조)
         self.job_data = {
-            "Job Title": "",
-            "Date of registration": "",
+            "Id": "",
+            "Title": "",
+            "DateOfRegistration": "",
             "Deadline": "",
-            "Job Category": "",
-            "Experience Required": "",
-            "Employment Type": "",
+            "JobCategory": "",
+            "ExperienceRequired": "",
+            "EmploymentType": "",
             "Salary": "",
-            "SocialEnsurance": "",
-            "RetirementBenefit": "",
-            "Location": "",
-            "Working Hours": "",
-            "Working Type": "",
-            "Company Name": "",
-            "Job Description": "",
+            "Address": "",
+            "Category": "",
+            "WorkingHours": "",
+            "CompanyName": "",
+            "JobDescription": "",
             "ApplicationMethod": "",
-            "ApplicationType": "",
-            "document": "",
-            "Detail" : ""
+            "Document": "",
+            "Detail": ""
         }
         
-        # Storage for collected jobs
+        # 수집된 job 저장
         self.jobs = []
         
-        # Current list being processed
-        self.current_list = ""
+        # ID 카운터
+        self.id_counter = 1
         
-        # Checkpoint configuration
-        self.checkpoint_file = checkpoint_file
-        self.checkpoint = {
-            "current_page": 1,
-            "current_list_index": 0,
-            "current_page_button": 4,
-            "last_processed_job_id": "",
-            "last_url": "",
-            "timestamp": ""
-        }
-        
-        # Keep track of processed jobs in memory (not saved to checkpoint)
+        # 이미 처리된 job ID 추적
         self.processed_job_ids = set()
         
-        # Add user agent to appear more like a regular browser
+        # 체크포인트 설정
+        self.checkpoint_file = checkpoint_file
+        self.checkpoint = {
+            "last_url": "",
+            "timestamp": "",
+            "First_title": "",
+            "Last_title": ""
+        }
+        
+        # 현재 세션의 시작 시간 (새로운 CSV 파일명에 사용)
+        self.session_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # 크롤링 중단 플래그
+        self.should_stop = False
+        
+        # 크롤링한 job 개수 카운터
+        self.job_count = 0
+        
+        # 카테고리 매핑을 위한 키워드 딕셔너리
+        self.keyword_mapping = {
+            # 요양보호사 관련
+            '요양보호사': ['요양보호사', '요양보호', '노인요양', '재가요양'],
+            
+            # 간병인 관련
+            '간병인': ['간병인', '간병'],
+            
+            # 간호조무사 관련
+            '간호조무사': ['간호조무사', '간호조무'],
+            
+            # 경비원 관련
+            '경비원': ['경비원', '경비', '시설경비', '건물경비', '아파트경비'],
+            
+            # 청소원 관련
+            '청소원': ['청소원', '청소', '미화원', '미화', '룸메이드', '하우스키퍼'],
+            
+            # 환경 미화원 관련
+            '환경 미화원': ['환경미화', '가로미화', '거리미화'],
+            
+            # 건물 관리원 관련
+            '건물 관리원': ['건물관리', '시설관리', '빌딩관리', '관리소장', '시설물관리'],
+            
+            # 건물 보수원 관련
+            '건물 보수원': ['건물보수', '시설보수', '영선'],
+            
+            # 전기관리원 관련
+            '전기관리원': ['전기관리', '전기안전', '전기기사'],
+            
+            # 조리사 관련
+            '조리사': ['조리사', '조리원', '급식조리', '주방장', '조리장'],
+            
+            # 주방 보조원 관련
+            '주방 보조원': ['주방보조', '조리보조', '급식보조', '주방도우미'],
+            
+            # 음식서비스 종사원 관련
+            '음식서비스 종사원': ['배식', '서빙', '홀서빙', '접객', '카운터'],
+            
+            # 운전원 관련
+            '버스 운전원': ['버스운전', '시내버스', '마을버스', '통근버스', '관광버스'],
+            '배송 운전원': ['배송운전', '배달', '택배', '납품운전', '화물운전'],
+            '승합차 운전원': ['승합차운전', '승합차', '봉고차'],
+            '택시 운전원': ['택시운전', '개인택시', '법인택시'],
+            
+            # 돌봄 종사원 관련
+            '돌봄 종사원': ['돌봄', '베이비시터', '육아도우미', '산후도우미', '보육도우미'],
+            
+            # 가사 도우미 관련
+            '가사 도우미': ['가사도우미', '가정도우미', '가정부', '파출부'],
+            
+            # 건설 단순 종사원 관련
+            '건설 단순 종사원': ['건설현장', '건설단순', '건설일용', '노무', '잡부'],
+            
+            # 사회복지사 관련
+            '사회복지사': ['사회복지사', '사회복지', '복지사'],
+            
+            # 보안 관제원 관련
+            '보안 관제원': ['보안관제', 'cctv관제', '관제요원'],
+            
+            # 보안 종사원 관련
+            '보안 종사원': ['보안요원', '경호원', '보안관'],
+            
+            # 주차 관리원 관련
+            '주차 관리원': ['주차관리', '주차안내', '주차요원'],
+            
+            # 방역원 관련
+            '방역원': ['방역', '소독', '방제', '해충퇴치'],
+            
+            # 산업 안전원 관련
+            '산업 안전원': ['안전관리', '산업안전', '안전요원'],
+            
+            # 영업 지원 사무원 관련
+            '영업 지원 사무원': ['영업지원', '영업사무', '영업관리'],
+            
+            # 품질관리 사무원 관련
+            '품질관리 사무원': ['품질관리', '품질검사', '검사원'],
+            
+            # 기숙사사감 관련
+            '기숙사사감': ['기숙사', '사감', '총무'],
+            
+            # 방과후 교사 관련
+            '방과후 교사': ['방과후', '방과후교사', '특기교사'],
+            
+            # 보건의료 서비스 종사원 관련
+            '보건의료 서비스 종사원': ['보건', '의료지원', '병원지원'],
+            
+            # 서비스 단순 종사원 관련
+            '서비스 단순 종사원': ['서비스', '단순서비스'],
+            
+            # 건축설비 기술자 관련
+            '건축설비 기술자': ['건축설비', '설비기술'],
+            
+            # 공업기계 정비원 관련
+            '공업기계 정비원': ['기계정비', '설비정비', '기계수리'],
+            
+            # 미디어 콘텐츠 디자이너 관련
+            '미디어 콘텐츠 디자이너': ['디자이너', '콘텐츠', '미디어디자인'],
+            
+            # 건설수주 영업원 관련
+            '건설수주 영업원': ['건설영업', '건설수주']
+        }
+        
+        # User agent 설정
         self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
             "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
         })
+    
+    def extract_category_from_employment_type(self, employment_type):
+        """EmploymentType에서 카테고리를 추출하는 함수"""
+        if pd.isna(employment_type) or employment_type == "" or employment_type == "Not found":
+            return None
         
+        # 소문자로 변환하여 비교
+        employment_type_lower = employment_type.lower()
+        
+        # 각 카테고리의 키워드를 확인
+        for category, keywords in self.keyword_mapping.items():
+            for keyword in keywords:
+                if keyword in employment_type_lower:
+                    return category
+        
+        # 매칭되는 카테고리가 없는 경우 None 반환
+        return None
+    
     def navigate_to_url(self, url):
-        """Navigate to the main job listing URL"""
+        """URL로 이동"""
         print(f"Navigating to {url}")
         self.driver.get(url)
-        time.sleep(3)  # Allow the page to load
+        time.sleep(3)
         self.checkpoint["last_url"] = url
         self.save_checkpoint()
-        
-    def get_job_links(self, list_selector, link_pattern):
-        """Get all job listing links for a particular list selector and extract basic info"""
-        print(f"Finding job links with selector: {list_selector} > {link_pattern}")
-        try:
-            # The full CSS selector is constructed from the list selector and the link pattern
-            full_selector = f"{list_selector} > {link_pattern}"
-            job_links = self.wait.until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, full_selector))
-            )
-            print(f"Found {len(job_links)} job links in {list_selector}")
-            
-            # Extract additional information directly from the listing
-            enhanced_links = []
-            for link in job_links:
-                try:
-                    # Reset global job_data for each link
-                    self.reset_job_data()
-                    
-                    # Get link element for navigation
-                    link_element = link
-                    
-                    # Extract the href URL and add it to Detail field
-                    try:
-                        href_url = link_element.get_attribute('href')
-                        if href_url:
-                            self.job_data["Detail"] = href_url
-                            print(f"Added Detail URL: {href_url}")
-                    except Exception as e:
-                        print(f"Error getting href attribute: {e}")
-                        self.job_data["Detail"] = "URL not found"
-                    
-                    # Extract the list number from the list_selector
-                    list_num = list_selector.replace('#list', '')
-                    
-                    # Try to get Date of registration using the provided selector pattern
-                    try:
-                        date_registration_selector = f"#list{list_num} > td:nth-child(5) > div > p:nth-child(2)"
-                        print(f"Trying registration date selector: {date_registration_selector}")
-                        date_element = self.driver.find_element(By.CSS_SELECTOR, date_registration_selector)
-                        date_text = date_element.text.strip()
-                        if date_text:
-                            self.job_data["Date of registration"] = date_text
-                            print(f"Found registration date: {date_text} for list {list_num}")
-                        else:
-                            self.job_data["Date of registration"] = "Not found"
-                            print(f"Empty registration date text for list {list_num}")
-                    except NoSuchElementException:
-                        self.job_data["Date of registration"] = "Not found"
-                        print(f"Registration date selector not found for list {list_num}")
-                    
-                    # Try to get deadline from the listing
-                    try:
-                        adjusted_list_num = str(int(list_num) - 1)
-                        
-                        # Try different deadline selectors based on the adjusted list number
-                        deadline_selector = f"#spanCloseDt{adjusted_list_num}"
-                        print(f"Trying deadline selector: {deadline_selector}")
-                        deadline_element = self.driver.find_element(By.CSS_SELECTOR, deadline_selector)
-                        deadline_text = deadline_element.text.strip()
-                        if deadline_text:  # Only use if we found actual text
-                            self.job_data["Deadline"] = deadline_text
-                            print(f"Found deadline directly: {deadline_text} (list {list_num}, adjusted to {adjusted_list_num})")
-                        else:
-                            self.job_data["Deadline"] = "채용시까지"
-                            print(f"Empty deadline text, using default: 채용시까지")
-                    except NoSuchElementException:
-                        self.job_data["Deadline"] = "채용시까지"
-                        print(f"Deadline selector not found, using default: 채용시까지")
-                    
-                    # Try to get job title from the listing
-                    try:
-                        # Get the text from the link itself - often this is the job title
-                        job_title = link.text.strip()
-                        if job_title:
-                            self.job_data["Job Title"] = job_title 
-                        else:
-                            # If link text is empty, try to find a title element nearby
-                            title_selector = f"{list_selector} > td:nth-child(3) > div > div > strong"
-                            title_text = self.driver.find_element(By.CSS_SELECTOR, title_selector).text.strip()
-                            if title_text:
-                                self.job_data["Job Title"] = title_text
-                    except:
-                        self.job_data["Job Title"] = "Not found in listing"
-                    
-                    # Store the link and the additional information
-                    enhanced_links.append({
-                        "link_element": link_element,
-                        "job_data": self.job_data.copy(),  # Create a copy of the current job_data
-                        "job_id": self.generate_job_id()  # Add a unique identifier for checkpoint tracking
-                    })
-                    
-                except Exception as e:
-                    print(f"Error extracting listing details: {e}")
-                    # Still include the link even if additional info extraction failed
-                    self.reset_job_data()
-                    enhanced_links.append({
-                        "link_element": link,
-                        "job_data": self.job_data.copy(),
-                        "job_id": self.generate_job_id()
-                    })
-            
-            return enhanced_links
-        except TimeoutException:
-            print(f"Timeout waiting for job links with selector: {list_selector}")
-            return []
-        except Exception as e:
-            print(f"Error getting job links for {list_selector}: {e}")
-            return []
-    
-    def generate_job_id(self):
-        """Generate a unique ID for a job based on current data"""
-        title = self.job_data.get("Job Title", "unknown")
-        company = self.job_data.get("Company Name", "unknown")
-        date = self.job_data.get("Date of registration", "unknown")
-        deadline = self.job_data.get("Deadline", "unknown")
-        # Create a simple hash that can be used for checkpointing
-        job_id = f"{title}_{date}_{deadline}"
-        return job_id
     
     def reset_job_data(self):
-        """Reset the global job_data dictionary to initial state with the new structure"""
+        """job_data 초기화"""
         self.job_data = {
-            "Job Title": "Not found",
-            "Date of registration": "Not found",
-            "Deadline": "채용시까지",  # Korean for "until hired"
-            "Job Category": "Not found",
-            "Experience Required": "Not found",
-            "Employment Type": "Not found",
-            "Salary": "Not found",
-            "SocialEnsurance": "Not found",
-            "RetirementBenefit": "Not found",
-            "Location": "Not found",
-            "Working Hours": "Not found",
-            "Working Type": "Not found",
-            "Company Name": "Not found",
-            "Job Description": "Not found",
-            "ApplicationMethod": "Not found",
-            "ApplicationType": "Not found",
-            "document": "Not found",
-            "Detail": "Not found"
+            "Id": "",
+            "Title": "",
+            "DateOfRegistration": "",
+            "Deadline": "",
+            "JobCategory": "",
+            "ExperienceRequired": "",
+            "EmploymentType": "",
+            "Salary": "",
+            "Address": "",
+            "Category": "",
+            "WorkingHours": "",
+            "CompanyName": "",
+            "JobDescription": "",
+            "ApplicationMethod": "",
+            "Document": "",
+            "Detail": ""
         }
-            
-    def extract_job_details(self):
-        """Extract job details from the current page (job detail window) using the new structure"""
-        print("Extracting job details")
+    
+    def extract_listing_data(self, list_num):
+        """리스트 페이지에서 기본 정보 추출"""
+        print(f"Extracting data from list {list_num}")
+        self.reset_job_data()
+        
+        # ID 할당
+        self.job_data["Id"] = str(self.id_counter)
+        self.id_counter += 1
+        
         try:
-            # Wait for page to load completely
-            time.sleep(3)  # Give the page more time to load
+            # Job Title
+            title_selector = f"#list{list_num} > td.al_left.pd24 > div > div:nth-child(2) > a"
+            title_element = self.driver.find_element(By.CSS_SELECTOR, title_selector)
+            self.job_data["Title"] = title_element.text.strip()
             
-            # First check what kind of page structure we're dealing with
-            print("Analyzing page structure...")
-            page_html = self.driver.page_source
+            # Detail URL
+            self.job_data["Detail"] = title_element.get_attribute('href')
             
-            # Print the page title to help identify what page we're on
-            print(f"Page title: {self.driver.title}")
+        except NoSuchElementException:
+            print(f"Job title not found for list {list_num}")
+        
+        try:
+            # Date of Registration
+            date_selector = f"#list{list_num} > td:nth-child(3) > p:nth-child(4)"
+            date_element = self.driver.find_element(By.CSS_SELECTOR, date_selector)
+            date_text = date_element.text.strip()
+            # '등록일 : ' 부분 제거
+            if '등록일 :' in date_text:
+                date_text = date_text.replace('등록일 :', '').strip()
+            elif '등록일:' in date_text:
+                date_text = date_text.replace('등록일:', '').strip()
+            self.job_data["DateOfRegistration"] = date_text
+        except NoSuchElementException:
+            pass
+        
+        try:
+            # Deadline
+            deadline_selector = f"#list{list_num} > td:nth-child(3) > p:nth-child(3)"
+            deadline_element = self.driver.find_element(By.CSS_SELECTOR, deadline_selector)
+            deadline_text = deadline_element.text.strip()
+            # '마감일 : ' 부분 제거
+            if '마감일 :' in deadline_text:
+                deadline_text = deadline_text.replace('마감일 :', '').strip()
+            elif '마감일:' in deadline_text:
+                deadline_text = deadline_text.replace('마감일:', '').strip()
+            self.job_data["Deadline"] = deadline_text
+        except NoSuchElementException:
+            pass
+        
+        try:
+            # Experience Required
+            exp_selector = f"#list{list_num} > td.link.pd24 > div > ul > li.member > p > span:nth-child(1)"
+            exp_element = self.driver.find_element(By.CSS_SELECTOR, exp_selector)
+            self.job_data["ExperienceRequired"] = exp_element.text.strip()
+        except NoSuchElementException:
+            pass
+        
+        try:
+            # Salary
+            salary_selector = f"#list{list_num} > td.link.pd24 > div > ul > li.dollar > p > span"
+            salary_element = self.driver.find_element(By.CSS_SELECTOR, salary_selector)
+            self.job_data["Salary"] = salary_element.text.strip()
+        except NoSuchElementException:
+            pass
+        
+        try:
+            # Address
+            address_selector = f"#list{list_num} > td.link.pd24 > div > ul > li.site > p"
+            address_element = self.driver.find_element(By.CSS_SELECTOR, address_selector)
+            address_text = address_element.text.strip()
+            self.job_data["Address"] = address_text
             
-            # Print URL to debug potential redirects
-            print(f"Current URL: {self.driver.current_url}")
+            # Category (Address의 두번째 텍스트)
+            address_parts = address_text.split()
+            if len(address_parts) >= 2:
+                self.job_data["Category"] = address_parts[1]
+            else:
+                self.job_data["Category"] = address_text
+                
+        except NoSuchElementException:
+            pass
+        
+        try:
+            # Working Hours
+            hours_selector = f"#list{list_num} > td.link.pd24 > div > ul > li.time"
+            hours_element = self.driver.find_element(By.CSS_SELECTOR, hours_selector)
+            self.job_data["WorkingHours"] = hours_element.text.strip()
+        except NoSuchElementException:
+            pass
+        
+        try:
+            # Company Name
+            company_selector = f"#list{list_num} > td.al_left.pd24 > div > div:nth-child(1) > div > label > span > a"
+            company_element = self.driver.find_element(By.CSS_SELECTOR, company_selector)
+            self.job_data["CompanyName"] = company_element.text.strip()
+        except NoSuchElementException:
+            pass
+        
+        return self.job_data.copy()
+    
+    def extract_detail_data(self):
+        """상세 페이지에서 추가 정보 추출"""
+        print("Extracting detail page data")
+        
+        try:
+            # Employment Type
+            emp_type_selector = "#tab-panel01 > div.box_table_wrap.write.mt16 > table > tbody > tr:nth-child(2) > td:nth-child(2)"
+            emp_type_element = self.driver.find_element(By.CSS_SELECTOR, emp_type_selector)
+            self.job_data["EmploymentType"] = emp_type_element.text.strip()
             
-            # Try different wait conditions to detect the page type
-            try:
-                # Try to wait for any of these common elements to appear
-                self.wait.until(lambda driver: driver.find_elements(By.CSS_SELECTOR, ".board-view") or 
-                                driver.find_elements(By.CSS_SELECTOR, ".careers-area") or
-                                driver.find_elements(By.CSS_SELECTOR, ".cp_name") or
-                                driver.find_elements(By.CSS_SELECTOR, ".tit"))
-                print("Page loaded successfully")
-            except TimeoutException:
-                print("Warning: Could not detect standard page elements. Continuing anyway...")
+            # EmploymentType을 기반으로 JobCategory 자동 설정
+            if not self.job_data["JobCategory"]:
+                extracted_category = self.extract_category_from_employment_type(self.job_data["EmploymentType"])
+                if extracted_category:
+                    self.job_data["JobCategory"] = extracted_category
+                    print(f"Category extracted from EmploymentType: {extracted_category}")
+                    
+        except NoSuchElementException:
+            print("Employment type not found")
+        
+        try:
+            # Job Description
+            desc_selector = "#tab-panel01 > div.box_border_type.expand.mt16 > div"
+            desc_element = self.driver.find_element(By.CSS_SELECTOR, desc_selector)
+            self.job_data["JobDescription"] = desc_element.text.strip()
+        except NoSuchElementException:
+            print("Job description not found")
+        
+        try:
+            # Application Method
+            app_method_selector = "#tab-panel05 > div:nth-child(3) > div > div.flex1 > p:nth-child(2)"
+            app_method_element = self.driver.find_element(By.CSS_SELECTOR, app_method_selector)
+            self.job_data["ApplicationMethod"] = app_method_element.text.strip()
+        except NoSuchElementException:
+            print("Application method not found")
+        
+        try:
+            # Document
+            doc_selector = "#tab-panel05 > div:nth-child(3) > div > div.flex1 > p:nth-child(4)"
+            doc_element = self.driver.find_element(By.CSS_SELECTOR, doc_selector)
+            self.job_data["Document"] = doc_element.text.strip()
+        except NoSuchElementException:
+            print("Document requirements not found")
+        
+        return True
+    
+    def crawl_job_detail(self, detail_url):
+        """상세 페이지 크롤링"""
+        main_window = self.driver.current_window_handle
+        
+        try:
+            # 새 탭에서 상세 페이지 열기
+            self.driver.execute_script(f"window.open('{detail_url}', '_blank');")
+            time.sleep(3)
             
-            # Extract company name 
-            try:
-                company_name = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div.careers-new > div.border > div.right > div.info > ul > li:nth-child(1) > div").text.strip()
-                if company_name:
-                    self.job_data["Company Name"] = company_name
-            except NoSuchElementException:
-                pass
-                
-                
-            # Extract job title (if not already set from listing)
-            if self.job_data["Job Title"] == "Not found" or self.job_data["Job Title"] == "Not found in listing":
-                try:
-                    title_element = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div.careers-new > div.border > div.left > div.tit-area > p")
-                    job_title = title_element.text.strip()
-                    if job_title:
-                        self.job_data["Job Title"] = job_title
-                except NoSuchElementException:
-                    try:
-                        # Try alternative selector
-                        title_element = self.driver.find_element(By.CSS_SELECTOR, ".tit > em")
-                        job_title = title_element.text.strip()
-                        if job_title:
-                            self.job_data["Job Title"] = job_title
-                    except NoSuchElementException:
-                        pass
-
-            # Extract job category
-            try:
-                job_category = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div:nth-child(6) > table > tbody > tr > td:nth-child(1)").text.strip()
-                if job_category:
-                    self.job_data["Job Category"] = job_category
-            except NoSuchElementException:
-                pass
-                
-            # Extract required experience
-            try:
-                experience = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div.careers-new > div.border > div.left > div:nth-child(2) > div:nth-child(1) > div > ul > li:nth-child(1) > span").text.strip()
-                if experience:
-                    self.job_data["Experience Required"] = experience
-            except NoSuchElementException:
-                try:
-                    experience = self.driver.find_element(By.CSS_SELECTOR, "td.pleft:nth-of-type(3)").text.strip()
-                    if experience:
-                        self.job_data["Experience Required"] = experience
-                except NoSuchElementException:
-                    pass
-                
-            # Extract employment type
-            try:
-                employment_type = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div.careers-new > div.border > div.left > div:nth-child(3) > div:nth-child(1) > div > ul > li:nth-child(1) > span").text.strip()
-                if employment_type:
-                    self.job_data["Employment Type"] = employment_type
-            except NoSuchElementException:
-                try:
-                    employment_type = self.driver.find_element(By.CSS_SELECTOR, "td.pleft:nth-of-type(6)").text.strip()
-                    if employment_type:
-                        self.job_data["Employment Type"] = employment_type
-                except NoSuchElementException:
-                    pass
-                
-            # Extract salary
-            try:
-                salary = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div.careers-new > div.border > div.left > div:nth-child(2) > div:nth-child(2) > div > ul > li:nth-child(2) > span").text.strip()
-                if salary:
-                    self.job_data["Salary"] = salary
-            except NoSuchElementException:
-                try:
-                    salary = self.driver.find_element(By.CSS_SELECTOR, "td.pleft:nth-of-type(7)").text.strip()
-                    if salary:
-                        self.job_data["Salary"] = salary
-                except NoSuchElementException:
-                    pass
-                
-            # Extract location
-            try:
-                location = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div.careers-new > div.border > div.left > div:nth-child(2) > div:nth-child(2) > div > ul > li:nth-child(1) > span").text.strip()
-                if location:
-                    self.job_data["Location"] = location
-            except NoSuchElementException:
-                try:
-                    location = self.driver.find_element(By.CSS_SELECTOR, "td.pleft:nth-of-type(8)").text.strip()
-                    if location:
-                        self.job_data["Location"] = location
-                except NoSuchElementException:
-                    pass
-
-            # Extract working type
-            try:
-                working_type = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div.careers-new > div.border > div.left > div:nth-child(3) > div:nth-child(1) > div > ul > li:nth-child(2) > span").text.strip()
-                if working_type:
-                    self.job_data["Working Type"] = working_type
-            except NoSuchElementException:
-                pass
-                
-            # Extract working hours
-            try:
-                working_hours = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div:nth-child(8) > table > tbody > tr > td:nth-child(2)").text.strip()
-                if working_hours:
-                    self.job_data["Working Hours"] = working_hours
-            except NoSuchElementException:
-                try:
-                    working_hours = self.driver.find_element(By.CSS_SELECTOR, "td.pleft:nth-of-type(9)").text.strip()
-                    if working_hours:
-                        self.job_data["Working Hours"] = working_hours
-                except NoSuchElementException:
-                    pass
-                
-            # Extract job description
-            try:
-                job_description = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div:nth-child(4) > table > tbody > tr > td").text.strip()
-                if job_description:
-                    self.job_data["Job Description"] = job_description
-            except NoSuchElementException:
-                pass
-                
-            # Extract Social Insurance information
-            try:
-                insurance_elements = self.driver.find_elements(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div:nth-child(8) > table > tbody > tr > td:nth-child(4)")
-                if insurance_elements and len(insurance_elements) > 0:
-                    insurance_info = insurance_elements[0].text.strip()
-                    if insurance_info:
-                        self.job_data["SocialEnsurance"] = insurance_info
-            except NoSuchElementException:
-                pass
-                
-            # Extract Retirement Benefit information
-            try:
-                retirement_elements = self.driver.find_elements(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div:nth-child(8) > table > tbody > tr > td:nth-child(5)")
-                if retirement_elements and len(retirement_elements) > 0:
-                    retirement_info = retirement_elements[0].text.strip()
-                    if retirement_info:
-                        self.job_data["RetirementBenefit"] = retirement_info
-            except NoSuchElementException:
-                pass
-                
-            # Extract application method
-            try:
-                application_method = self.driver.find_element(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div:nth-child(11) > table > tbody > tr > td:nth-child(3)").text.strip()
-                if application_method:
-                    self.job_data["ApplicationMethod"] = application_method
-            except NoSuchElementException:
-                pass
-
-            # Extract Application Type
-            try:
-                app_type_elements = self.driver.find_elements(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div:nth-child(11) > table > tbody > tr > td:nth-child(2)")
-                if app_type_elements and len(app_type_elements) > 0:
-                    app_type_info = app_type_elements[0].text.strip()
-                    if app_type_info:
-                        self.job_data["ApplicationType"] = app_type_info
-            except NoSuchElementException:
-                pass
-                
-            # Extract document requirements
-            try:
-                document_elements = self.driver.find_elements(By.CSS_SELECTOR, "#contents > section > div > div.careers-area > div:nth-child(11) > table > tbody > tr > td:nth-child(4)")
-                if document_elements and len(document_elements) > 0:
-                    document_info = document_elements[0].text.strip()
-                    if document_info:
-                        self.job_data["document"] = document_info
-            except NoSuchElementException:
-                pass
+            # 새 탭으로 전환
+            all_windows = self.driver.window_handles
+            for window in all_windows:
+                if window != main_window:
+                    self.driver.switch_to.window(window)
+                    break
             
-            print(f"Extracted job details for {self.job_data['Job Title']} at {self.job_data['Company Name']}")
+            # 상세 정보 추출
+            self.extract_detail_data()
+            
+            # 탭 닫고 메인 윈도우로 복귀
+            self.driver.close()
+            self.driver.switch_to.window(main_window)
+            time.sleep(1)
+            
             return True
             
         except Exception as e:
-            print(f"Error extracting job details: {e}")
+            print(f"Error crawling detail page: {e}")
+            # 에러 발생 시 메인 윈도우로 복귀
+            try:
+                self.driver.switch_to.window(main_window)
+            except:
+                pass
             return False
     
-    def crawl_specific_job(self, job_link_info):
-        """Click on a job link and crawl the details from the new window"""
-        main_window = self.driver.current_window_handle
+    def crawl_page_jobs(self):
+        """현재 페이지의 모든 job 크롤링"""
+        page_jobs = []
         
-        # Extract the link element, initial job data, and job ID from listing page
-        job_link = job_link_info["link_element"]
-        listing_job_data = job_link_info["job_data"]
-        job_id = job_link_info["job_id"]
-        
-        # Check if we've already processed this job (using in-memory set)
-        if job_id in self.processed_job_ids:
-            print(f"Skipping already processed job: {listing_job_data['Job Title']}")
-            return
-        
-        # Set global job_data to the data from listing page
-        self.job_data = listing_job_data.copy()
-        
+        # 첫 번째 job 제목 저장 (페이지 변경 확인용)
         try:
-            # Get link URL using JavaScript instead of direct clicking
-            print("Getting job link URL...")
-            link_url = None
-            
+            first_job_title = self.driver.find_element(By.CSS_SELECTOR, "#list1 > td.al_left.pd24 > div > div:nth-child(2) > a").text
+            self.last_first_job_title = first_job_title
+        except:
+            pass
+        
+        # 각 리스트 (1-10) 크롤링
+        for list_num in range(1, 11):
             try:
-                # Try to get href attribute
-                link_url = job_link.get_attribute('href')
-                print(f"Found link URL: {link_url}")
-            except Exception as e:
-                print(f"Could not get href attribute: {e}")
-                # Try clicking instead
-                try:
-                    # Make sure element is clickable
-                    self.wait.until(EC.element_to_be_clickable((By.XPATH, f".//*[contains(text(), '{job_link.text}')]")))
-                    job_link.click()
-                    print("Clicked job link directly")
-                except Exception as click_error:
-                    print(f"Click failed too: {click_error}")
-                    # Try JavaScript click as last resort
-                    try:
-                        self.driver.execute_script("arguments[0].click();", job_link)
-                        print("Used JavaScript click as fallback")
-                    except:
-                        print("All click methods failed")
-                        # Add the job data from the listing page
-                        self.jobs.append(self.job_data.copy())
-                        # Mark this job as processed
-                        self.checkpoint["processed_job_ids"].add(job_id)
-                        self.save_checkpoint()
-                        print(f"Added basic data from listing page for: {self.job_data['Job Title']}")
-                        return
-            
-            # If we got a URL, open it in a new window/tab
-            if link_url:
-                print(f"Opening URL in new window: {link_url}")
-                # Open in new window using JavaScript
-                self.driver.execute_script(f"window.open('{link_url}', '_blank');")
-                time.sleep(3)  # Wait for new window to open
-            else:
-                # If we clicked directly, wait for new window
-                time.sleep(3)
-            
-            # Switch to the new window
-            all_windows = self.driver.window_handles
-            if len(all_windows) > 1:
-                for window in all_windows:
-                    if window != main_window:
-                        self.driver.switch_to.window(window)
-                        print("Switched to job details window")
-                        break
+                # 리스트에서 기본 정보 추출
+                job_data = self.extract_listing_data(list_num)
                 
-                # Extract job details with extended timeout
-                success = self.extract_job_details()
-                
-                if success:
-                    # Add the job data to the collected jobs
-                    self.jobs.append(self.job_data.copy())
-                    # Mark this job as processed (in memory)
-                    self.processed_job_ids.add(job_id)
-                    # Update the checkpoint with just the last processed job ID
-                    self.checkpoint["last_processed_job_id"] = job_id
+                # 이번 크롤링의 첫 번째 job을 First_title로 설정 (최신 데이터)
+                if self.job_count == 0:
+                    self.checkpoint["First_title"] = job_data["Title"]
                     self.save_checkpoint()
-                    print(f"Successfully added job data: {self.job_data['Job Title']}")
-                else:
-                    # Even if detailed extraction failed, use the data from listing
-                    self.jobs.append(self.job_data.copy())
-                    # Mark as processed
-                    self.checkpoint["processed_job_ids"].add(job_id)
-                    self.save_checkpoint()
-                    print(f"Added job data with limited details: {self.job_data['Job Title']}")
+                    print(f"First_title set (newest job): {self.checkpoint['First_title']}")
                 
-                # Close the job details window and switch back to main window
-                try:
-                    self.driver.close()
-                    self.driver.switch_to.window(main_window)
-                    print("Closed job details window and returned to main window")
-                except Exception as close_error:
-                    print(f"Error closing window: {close_error}")
-                    # Force switch to main window
-                    self.driver.switch_to.window(main_window)
+                # Last_title(이전 크롤링의 첫 번째 job)과 비교하여 중단 여부 결정
+                if self.checkpoint["Last_title"] and job_data["Title"] == self.checkpoint["Last_title"]:
+                    print(f"Found previous First_title (Last_title): {job_data['Title']}")
+                    print("All new jobs have been crawled. Stopping.")
+                    self.should_stop = True
+                    break
                 
-                time.sleep(2)  # Longer pause before next action
-            else:
-                print("No new window opened after clicking the link")
-                # If we couldn't open window but have listing data, still create a record
-                self.jobs.append(self.job_data.copy())
-                # Mark as processed (in memory)
-                self.processed_job_ids.add(job_id)
-                # Update the checkpoint with just the last processed job ID
-                self.checkpoint["last_processed_job_id"] = job_id
-                self.save_checkpoint()
-                print(f"Added job data without window: {self.job_data['Job Title']}")
-            
-        except Exception as e:
-            print(f"Error processing job link: {e}")
-            # Still add the data we have
-            self.jobs.append(self.job_data.copy())
-            # Mark as processed despite error (in memory)
-            self.processed_job_ids.add(job_id)
-            # Update the checkpoint with just the last processed job ID
-            self.checkpoint["last_processed_job_id"] = job_id
-            self.save_checkpoint()
-            print(f"Added job data after error: {self.job_data['Job Title']}")
-            
-            # Recovery procedure
-            try:
-                # Make sure all windows except main are closed
-                current_windows = self.driver.window_handles
-                for window in current_windows:
-                    if window != main_window:
-                        self.driver.switch_to.window(window)
-                        self.driver.close()
+                # job ID 생성
+                job_id = f"{job_data['Title']}_{job_data['DateOfRegistration']}_{job_data['Deadline']}"
                 
-                # Switch back to main window
-                self.driver.switch_to.window(main_window)
-                print("Performed emergency recovery")
-                time.sleep(2)
-            except Exception as recovery_error:
-                print(f"Recovery failed: {recovery_error}")
-                # Last resort: restart browser
-                try:
-                    self.driver.quit()
-                    print("Restarting browser...")
-                    self.driver = webdriver.Chrome(options=self.chrome_options)
-                    self.wait = WebDriverWait(self.driver, 10)
-                    self.driver.get(self.driver.current_url)
-                    time.sleep(5)
-                except:
-                    print("Could not restart browser")
-    
-    def crawl_list_jobs(self, list_selector, link_pattern, list_index):
-        """Crawl all jobs in a specific list on the current page"""
-        self.current_list = list_selector  # Track current list for data tracking
-        print(f"Processing jobs in {list_selector}")
-        
-        # Update checkpoint with current list
-        self.checkpoint["current_list_index"] = list_index
-        self.save_checkpoint()
-        
-        # Initialize retry counter
-        retry_count = 0
-        max_retries = 3
-        
-        while retry_count < max_retries:
-            try:
-                # Try with the provided pattern first
-                job_links_info = self.get_job_links(list_selector, link_pattern)
-                
-                # If no links found, try alternative pattern
-                if not job_links_info:
-                    print(f"No links found with primary pattern, trying alternative...")
-                    alternative_pattern = "td:nth-child(3) > div > div > a"  # Alternative pattern
-                    job_links_info = self.get_job_links(list_selector, alternative_pattern)
-                
-                # If still no links, try with a very generic pattern
-                if not job_links_info:
-                    print(f"Still no links, trying generic pattern...")
-                    generic_pattern = "a[href*='empInfo']"  # Very generic pattern
-                    job_links_info = self.get_job_links(list_selector, generic_pattern)
-                
-                if not job_links_info:
-                    print(f"No job links found in {list_selector} after trying all patterns")
-                    retry_count += 1
-                    time.sleep(1)
+                # 이미 처리된 job인지 확인
+                if job_id in self.processed_job_ids:
+                    print(f"Skipping already processed job: {job_data['Title']}")
                     continue
                 
-                print(f"Found {len(job_links_info)} links to process in {list_selector}")
-                for i, link_info in enumerate(job_links_info):
-                    print(f"Processing job {i+1}/{len(job_links_info)} from {list_selector}")
-                    try:
-                        # Scroll to the element to ensure it's clickable
-                        self.driver.execute_script("arguments[0].scrollIntoView(true);", link_info["link_element"])
-                        time.sleep(0.5)
-                        
-                        # Crawl this specific job
-                        self.crawl_specific_job(link_info)
-                        
-                    except StaleElementReferenceException:
-                        print("Element became stale, refreshing job links")
-                        # Try all patterns again when refreshing
-                        refreshed_links = self.get_job_links(list_selector, link_pattern)
-                        if not refreshed_links:
-                            refreshed_links = self.get_job_links(list_selector, "td:nth-child(3) > div > div > a")
-                        if not refreshed_links:
-                            refreshed_links = self.get_job_links(list_selector, "a[href*='empInfo']")
-                            
-                        if refreshed_links and i < len(refreshed_links):
-                            self.crawl_specific_job(refreshed_links[i])
-                        else:
-                            print(f"Could not retrieve job link {i} after refresh")
-                    
-                    except Exception as e:
-                        print(f"Error processing job link {i}: {e}")
+                # 현재 job_data 설정
+                self.job_data = job_data
                 
-                # If we got here without exceptions, break the retry loop
-                break
+                # 상세 페이지 크롤링
+                if job_data["Detail"]:
+                    self.crawl_job_detail(job_data["Detail"])
+                
+                # 수집된 데이터 저장
+                page_jobs.append(self.job_data.copy())
+                self.processed_job_ids.add(job_id)
+                self.job_count += 1
+                
+                print(f"Successfully crawled job {list_num}: {self.job_data['Title']} (Category: {self.job_data['JobCategory']})")
                 
             except Exception as e:
-                print(f"Error processing list {list_selector}: {e}")
-                retry_count += 1
-                if retry_count >= max_retries:
-                    print(f"Max retries reached for {list_selector}, moving to next list")
+                print(f"Error processing list {list_num}: {e}")
+                continue
+        
+        return page_jobs
     
+    def go_to_next_page(self, current_page):
+        """다음 페이지로 이동"""
+        try:
+            # 페이지 하단으로 스크롤
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
+            
+            # 팝업이나 모달 닫기 시도
+            try:
+                # 일반적인 팝업 닫기 버튼들 시도
+                close_buttons = [
+                    "button.close", 
+                    "button.btn_close",
+                    "a.close",
+                    ".popup_close",
+                    "[class*='close']",
+                    "[title*='닫기']"
+                ]
+                
+                for selector in close_buttons:
+                    try:
+                        close_btn = self.driver.find_element(By.CSS_SELECTOR, selector)
+                        if close_btn.is_displayed():
+                            close_btn.click()
+                            time.sleep(1)
+                            break
+                    except:
+                        continue
+            except:
+                pass
+            
+            if current_page % 10 == 0:
+                # 11페이지로 가는 버튼 (next 버튼)
+                next_button_selector = "#mForm > div.box_group_wrap > div > div.section_bottom > div > div > div > button.btn_page.next"
+            else:
+                # 페이지 번호 버튼을 직접 찾기
+                # 현재 페이지가 1이면 2를 찾고, 2면 3을 찾는 방식
+                target_page = current_page + 1
+                
+                # 방법 1: 텍스트로 버튼 찾기
+                try:
+                    buttons = self.driver.find_elements(By.CSS_SELECTOR, "#mForm > div.box_group_wrap > div > div.section_bottom > div > div > div > button")
+                    for i, button in enumerate(buttons):
+                        if button.text.strip() == str(target_page):
+                            next_button_selector = f"#mForm > div.box_group_wrap > div > div.section_bottom > div > div > div > button:nth-child({i+1})"
+                            print(f"Found button for page {target_page} at index {i+1}")
+                            break
+                    else:
+                        # 버튼을 찾지 못한 경우 기본 계산 사용
+                        button_index = target_page + 1  # 조정된 인덱스
+                        next_button_selector = f"#mForm > div.box_group_wrap > div > div.section_bottom > div > div > div > button:nth-child({button_index})"
+                except:
+                    # 에러 시 기본 계산 사용
+                    button_index = target_page + 1
+                    next_button_selector = f"#mForm > div.box_group_wrap > div > div.section_bottom > div > div > div > button:nth-child({button_index})"
+            
+            print(f"Looking for next page button: {next_button_selector}")
+            
+            # 여러 방법으로 클릭 시도
+            try:
+                # 방법 1: XPath로 정확한 버튼 찾기
+                target_page = current_page + 1
+                xpath_selector = f"//button[text()='{target_page}']"
+                
+                try:
+                    next_button = self.driver.find_element(By.XPATH, xpath_selector)
+                    print(f"Found button using XPath for page {target_page}")
+                except:
+                    # CSS selector로 시도
+                    next_button = self.driver.find_element(By.CSS_SELECTOR, next_button_selector)
+                
+                # 버튼이 보이도록 스크롤
+                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
+                time.sleep(1)
+                
+                # 추가 스크롤로 버튼이 완전히 보이도록 함
+                self.driver.execute_script("window.scrollBy(0, 100);")
+                time.sleep(1)
+                
+                # 버튼이 활성화되어 있는지 확인
+                if next_button.get_attribute("disabled"):
+                    print(f"Button for page {target_page} is disabled")
+                    return False
+                
+                next_button.click()
+                print(f"Clicked button to go to page {current_page + 1}")
+                
+            except Exception as e:
+                print(f"Normal click failed: {e}")
+                
+                # 방법 2: JavaScript 클릭
+                try:
+                    next_button = self.driver.find_element(By.CSS_SELECTOR, next_button_selector)
+                    self.driver.execute_script("arguments[0].click();", next_button)
+                    print(f"JavaScript clicked button to go to page {current_page + 1}")
+                    
+                except Exception as e2:
+                    print(f"JavaScript click also failed: {e2}")
+                    
+                    # 방법 3: ActionChains 사용
+                    try:
+                        from selenium.webdriver.common.action_chains import ActionChains
+                        next_button = self.driver.find_element(By.CSS_SELECTOR, next_button_selector)
+                        actions = ActionChains(self.driver)
+                        actions.move_to_element(next_button).click().perform()
+                        print(f"ActionChains clicked button to go to page {current_page + 1}")
+                        
+                    except Exception as e3:
+                        print(f"ActionChains click also failed: {e3}")
+                        return False
+            
+            # 페이지 로딩 대기
+            time.sleep(3)
+            
+            # 페이지가 실제로 변경되었는지 확인 (여러 방법 시도)
+            try:
+                # 방법 1: aria-current 속성으로 확인
+                active_page = self.driver.find_element(By.CSS_SELECTOR, "button[aria-current='true']")
+                active_page_num = active_page.text.strip()
+                expected_page_num = str(current_page + 1)
+                
+                if active_page_num == expected_page_num:
+                    print(f"Successfully moved to page {expected_page_num}")
+                    return True
+                
+                # 방법 2: URL 파라미터 확인
+                current_url = self.driver.current_url
+                if f"currentPageNo={expected_page_num}" in current_url or f"pageIndex={expected_page_num}" in current_url:
+                    print(f"URL confirms page change to {expected_page_num}")
+                    return True
+                
+                # 방법 3: 첫 번째 job의 내용이 변경되었는지 확인
+                try:
+                    first_job_title = self.driver.find_element(By.CSS_SELECTOR, "#list1 > td.al_left.pd24 > div > div:nth-child(2) > a").text
+                    if hasattr(self, 'last_first_job_title') and self.last_first_job_title != first_job_title:
+                        print(f"Job content changed, assuming successful page navigation")
+                        return True
+                except:
+                    pass
+                
+                print(f"Page change verification failed. Expected: {expected_page_num}, Actual: {active_page_num}")
+                # 페이지 번호가 맞지 않아도 일단 진행 (때로는 검증이 정확하지 않을 수 있음)
+                return True
+                    
+            except:
+                # 페이지 번호 확인이 실패해도 일단 진행
+                print("Could not verify page change, but continuing...")
+                return True
+                
+        except Exception as e:
+            print(f"Error navigating to next page: {e}")
+            
+            # 에러 발생 시 페이지 새로고침 후 재시도
+            try:
+                print("Attempting to refresh and retry...")
+                self.driver.refresh()
+                time.sleep(3)
+                
+                # 페이지 하단으로 다시 스크롤
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(2)
+                
+                # 다시 버튼 찾아서 클릭
+                next_button = self.driver.find_element(By.CSS_SELECTOR, next_button_selector)
+                self.driver.execute_script("arguments[0].click();", next_button)
+                time.sleep(3)
+                return True
+                
+            except:
+                return False
     
-    def save_to_csv(self, filename="job_data.csv"):
-        """Save the collected job data to a CSV file, creating it if it doesn't exist
-        and appending to it if it does, ensuring proper line breaks between entries"""
+    def save_to_csv(self, filename=None):
+        """CSV 파일로 저장"""
         if not self.jobs:
             print("No jobs to save.")
             return
-            
-        # Create DataFrame from current job data
+        
+        # 파일명이 지정되지 않은 경우 세션 시간을 사용한 새로운 파일명 생성
+        if filename is None:
+            filename = f"job_data_{self.session_time}.csv"
+        
         df_new = pd.DataFrame(self.jobs)
         
-        # Check if file already exists
-        file_exists = os.path.isfile(filename)
+        # 카테고리별 통계 출력
+        print("\n=== Category Statistics ===")
+        category_counts = df_new['JobCategory'].value_counts()
+        print(category_counts.head(20))
+        print(f"\nTotal categories assigned: {df_new[df_new['JobCategory'] != '']['JobCategory'].count()}")
+        print(f"No category assigned: {df_new[df_new['JobCategory'] == '']['JobCategory'].count()}")
         
-        if file_exists:
+        if os.path.isfile(filename):
             try:
-                # Read existing CSV
                 df_existing = pd.read_csv(filename, encoding='utf-8-sig')
-                
-                # Append new data to existing data
                 df_combined = pd.concat([df_existing, df_new], ignore_index=True)
-                
-                # Remove duplicates (in case we recrawled some jobs)
-                df_combined = df_combined.drop_duplicates(subset=['Job Title', 'Company Name', 'Deadline'], keep='last')
-                
-                # Save combined dataframe with proper line separator
+                df_combined = df_combined.drop_duplicates(subset=['Title', 'CompanyName', 'Deadline'], keep='last')
                 df_combined.to_csv(filename, index=False, encoding='utf-8-sig', lineterminator='\n')
-                print(f"Appended {len(df_new)} jobs to existing file {filename}. Total: {len(df_combined)} jobs")
-                
+                print(f"\nAppended {len(df_new)} jobs to {filename}. Total: {len(df_combined)} jobs")
             except Exception as e:
                 print(f"Error appending to existing file: {e}")
-                # Fallback to creating a new file with current data only
                 df_new.to_csv(filename, index=False, encoding='utf-8-sig', lineterminator='\n')
-                print(f"Created new file {filename} with {len(df_new)} jobs")
         else:
-            # File doesn't exist, create new
             df_new.to_csv(filename, index=False, encoding='utf-8-sig', lineterminator='\n')
-            print(f"Created new file {filename} with {len(df_new)} jobs")
+            print(f"\nCreated new file {filename} with {len(df_new)} jobs")
         
-        # Reset the jobs list to free memory after saving to CSV
         self.jobs = []
-        print("job opening saved successfully")
     
-    def close(self):
-        """Close the browser and clean up"""
-        self.driver.quit()
-    
-    def load_checkpoint(self):
-        """Load the crawling checkpoint from a file if it exists"""
-        if not os.path.exists(self.checkpoint_file):
-            print("No checkpoint file found, starting from beginning")
-            return False
-        
-        try:
-            with open(self.checkpoint_file, 'r', encoding='utf-8') as f:
-                checkpoint_data = json.load(f)
-                
-                # Add the last processed job ID to our in-memory set
-                if "last_processed_job_id" in checkpoint_data and checkpoint_data["last_processed_job_id"]:
-                    self.processed_job_ids.add(checkpoint_data["last_processed_job_id"])
-                
-                self.checkpoint = checkpoint_data
-                print(f"Loaded checkpoint: Page {self.checkpoint['current_page']}, List {self.checkpoint['current_list_index']}")
-                print(f"Last processed job ID: {self.checkpoint.get('last_processed_job_id', 'None')}")
-                return True
-        except Exception as e:
-            print(f"Error loading checkpoint: {e}")
-            return False
-        
     def save_checkpoint(self):
-        """Save the current crawling state to a checkpoint file"""
+        """체크포인트 저장"""
         try:
-            # Create a copy of the checkpoint for serialization
             checkpoint_data = self.checkpoint.copy()
-            checkpoint_data["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            checkpoint_data["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             with open(self.checkpoint_file, 'w', encoding='utf-8') as f:
                 json.dump(checkpoint_data, f, ensure_ascii=False, indent=2)
                 
-            print(f"Checkpoint saved with last processed job ID: {self.checkpoint.get('last_processed_job_id', 'None')}")
+            print(f"Checkpoint saved")
         except Exception as e:
             print(f"Error saving checkpoint: {e}")
     
-    def navigate_to_checkpoint(self, start_url):
-        """Navigate to the page and position specified in the checkpoint"""
-        if not self.checkpoint["last_url"]:
-            self.navigate_to_url(start_url)
-            return
-        
-        try:
-            # Navigate to the last URL first
-            self.navigate_to_url(self.checkpoint["last_url"])
-            
-            # If we're not on page 1, navigate to the correct page
-            current_page = self.checkpoint["current_page"]
-            current_button = self.checkpoint["current_page_button"]
-            
-            if current_page > 1:
-                print(f"Navigating to checkpoint page {current_page}")
-                
-                # Click through pages to get to the checkpoint page
-                for page_num in range(1, current_page):
-                    button_index = 3 + page_num  # Adjust button index based on page number
-                    if button_index > 12:
-                        # Reset after reaching the end of pagination set
-                        button_index = 4
-                        # Click the "next" control instead
-                        try:
-                            next_control = self.driver.find_element(By.CSS_SELECTOR, "#frm > div.nav_wrp > nav > a.control.next")
-                            next_control.click()
-                            time.sleep(3)
-                        except:
-                            print("Error navigating to next pagination set")
-                            break
-                    else:
-                        try:
-                            page_button = self.driver.find_element(By.CSS_SELECTOR, f"#frm > div.nav_wrp > nav > a:nth-child({button_index})")
-                            page_button.click()
-                            time.sleep(3)
-                        except:
-                            print(f"Error clicking page button {button_index}")
-                            break
-                
-                print(f"Reached checkpoint page {current_page}")
-            
-        except Exception as e:
-            print(f"Error navigating to checkpoint: {e}")
-            # Fall back to starting URL if there's an error
-            self.navigate_to_url(start_url)
-
-    def go_to_next_page(self, current_button_index):
-        """Navigate to the next page using the specified button index or next control button"""
-        try:
-            # For non-page-10 situations, use the numbered page buttons
-            page_button_selector = f"#frm > div.nav_wrp > nav > a:nth-child({current_button_index})"
-            print(f"Looking for page button: {page_button_selector}")
-            
-            try:
-                page_button = self.driver.find_element(By.CSS_SELECTOR, page_button_selector)
-                button_text = page_button.text.strip()
-                page_button.click()
-                print(f"Clicked page button #{current_button_index} (page {button_text})")
-                time.sleep(3)  # Wait for page to load
-                
-            except Exception as button_error:
-                print(f"Error finding or clicking page button #{current_button_index}: {button_error}")
-                
-        except Exception as e:
-            print(f"Error navigating to next page: {e}")
+    def load_checkpoint(self):
+        """체크포인트 로드"""
+        if not os.path.exists(self.checkpoint_file):
+            print("No checkpoint file found. This is the first crawl.")
             return False
         
-    def run(self, start_url, max_pages=100):
-        """Run the comprehensive scraping process for all lists and pages"""
-        # Use consistent pattern across all lists
-        list_configs = []
-        
-        # Generate configurations for list1 through list10
-        for i in range(1, 11):
-            list_configs.append({
-                "selector": f"#list{i}", 
-                "pattern": "td:nth-child(3) > div > div > a"  # Use the specific pattern as requested
-            })
-        
-        # Load checkpoint if it exists and populate job ID tracking
-        checkpoint_exists = self.load_checkpoint()
-        
-        # If resuming from a checkpoint, load all previously saved jobs to avoid duplicates
-        if checkpoint_exists and os.path.exists("job_data.csv"):
-            try:
-                print("Loading existing job data to avoid duplicates...")
-                df_existing = pd.read_csv("job_data.csv", encoding='utf-8-sig')
-                # Generate job IDs for all existing jobs and add to processed set
-                for _, row in df_existing.iterrows():
-                    job_id = f"{row.get('Job Title', 'unknown')}_{row.get('Date of registration', 'unknown')}_{row.get('Deadline', 'unknown')}"
-                    self.processed_job_ids.add(job_id)
-                print(f"Loaded {len(self.processed_job_ids)} job IDs from existing data to prevent duplicates")
-            except Exception as e:
-                print(f"Error loading existing job data: {e}")
-        
         try:
-            # Navigate to the appropriate starting point
-            if checkpoint_exists:
-                self.navigate_to_checkpoint(start_url)
-                # Set the page count and button index from checkpoint
-                page_count = self.checkpoint["current_page"]
-                current_page_button = self.checkpoint["current_page_button"]
-                # Get the list index to start from
-                start_list_index = self.checkpoint["current_list_index"]
-            else:
-                # Start from the URL provided (page 10)
-                self.navigate_to_url(start_url)
-                page_count = 1
-                current_page_button = 4  # Button index for page 10
-                start_list_index = 0
+            with open(self.checkpoint_file, 'r', encoding='utf-8') as f:
+                loaded_checkpoint = json.load(f)
             
-            while page_count <= max_pages:
-                print(f"\n--- Scraping page {page_count} ---")
+            # First_title이 있고 Last_title이 없는 경우 (이전 크롤링 완료)
+            if "First_title" in loaded_checkpoint and loaded_checkpoint["First_title"] and not loaded_checkpoint.get("Last_title"):
+                self.checkpoint["Last_title"] = loaded_checkpoint["First_title"]
+                print(f"Set Last_title from previous First_title: {self.checkpoint['Last_title']}")
                 
-                # Update checkpoint with current page
-                self.checkpoint["current_page"] = page_count
-                self.checkpoint["current_page_button"] = current_page_button
+                # 체크포인트 파일 업데이트
+                self.checkpoint["First_title"] = ""
                 self.save_checkpoint()
                 
-                # Crawl jobs from each list on this page, starting from the checkpoint list
-                for list_index, list_config in enumerate(list_configs[start_list_index:], start=start_list_index):
-                    print(f"\n--- Processing {list_config['selector']} (index {list_index}) ---")
-                    self.crawl_list_jobs(list_config['selector'], list_config['pattern'], list_index)
-
-                    # Save progress to main CSV file after each list
-                    self.save_to_csv("job_data.csv")
-                    
-                
-                # Reset the list index for the next page to start from the beginning
-                start_list_index = 0
-
-                            # Special case: If we just finished a page that's a multiple of 10 (like 10, 20, 30), go to next page set
-                if page_count % 10 == 0 and list_config["selector"] == "#list10":
-                    print(f"\n--- Finished page {page_count}, list 10. Moving to page {page_count+1} ---")
-                    try:
-                        # Navigate to next page using the next button
-                        next_control_selector = "#frm > div.nav_wrp > nav > a.control.next"
-                        next_control = self.driver.find_element(By.CSS_SELECTOR, next_control_selector)
-                        time.sleep(0.5)
-                        
-                        # Use JavaScript click for more reliability
-                        self.driver.execute_script("arguments[0].click();", next_control)
-                        print(f"Clicked 'next' control button to move to page {page_count+1}")
-                        time.sleep(3)  # Wait for page to load
-                        
-                        # Update page count and button index for the next page
-                        page_count += 1
-                        current_page_button = 4  # Button index for page 1 in new set
-                        start_list_index = 0  # Start from list 1 on the new page
-                        
-                        # Update checkpoint
-                        self.checkpoint["current_page"] = page_count
-                        self.checkpoint["current_page_button"] = current_page_button
-                        self.checkpoint["current_list_index"] = start_list_index
-                        self.save_checkpoint()
-                        
-                    except Exception as e:
-                        print(f"Error navigating to page {page_count+1}: {e}")
-
-                else :
-                    # After crawling all lists (list1 through list10), move to next page
-                    print("go to next page")
-                    self.go_to_next_page(current_page_button)
-                    page_count += 1
-                        # Only increment the button index if we didn't just click the "next" control
-                        # The go_to_next_page function now handles resetting the button index when needed
-                    if current_page_button != 12:  # If we weren't on page 10
-                        current_page_button += 1
-                
-            # Save the final collected job data
-            self.save_to_csv("job_data.csv")
+            # Last_title이 이미 있는 경우
+            elif "Last_title" in loaded_checkpoint and loaded_checkpoint["Last_title"]:
+                self.checkpoint["Last_title"] = loaded_checkpoint["Last_title"]
+                print(f"Loaded existing Last_title: {self.checkpoint['Last_title']}")
             
-            # Keep the checkpoint file for future use
-            print("Crawling completed successfully. Checkpoint file preserved for future use.")
+            else:
+                print("No Last_title found. Will crawl all jobs.")
+            
+            print(f"Checkpoint loaded successfully")
+            return True
+        except Exception as e:
+            print(f"Error loading checkpoint: {e}")
+            return False
+    
+    def run(self, start_url, max_pages=100):
+        """메인 크롤링 실행"""
+        # 체크포인트 로드
+        self.load_checkpoint()
+        
+        try:
+            # 시작 URL로 이동
+            self.navigate_to_url(start_url)
+            
+            current_page = 1
+            
+            # 페이지별 크롤링
+            while current_page <= max_pages and not self.should_stop:
+                print(f"\n=== Crawling page {current_page} ===")
+                
+                # 현재 페이지의 모든 job 크롤링
+                page_jobs = self.crawl_page_jobs()
+                self.jobs.extend(page_jobs)
+                
+                # CSV 저장 (페이지마다)
+                self.save_to_csv()
+                
+                print(f"Page {current_page} completed. Collected {len(page_jobs)} jobs")
+                
+                # 중단 플래그 확인
+                if self.should_stop:
+                    print("\n=== Crawling completed ===")
+                    print(f"Total new jobs collected: {self.job_count}")
+                    
+                    # 크롤링 완료 후 First_title을 Last_title로 업데이트
+                    if self.checkpoint["First_title"]:
+                        self.checkpoint["Last_title"] = self.checkpoint["First_title"]
+                        self.checkpoint["First_title"] = ""  # 다음 크롤링을 위해 초기화
+                        self.save_checkpoint()
+                        print(f"Updated Last_title for next crawl: {self.checkpoint['Last_title']}")
+                    break
+                
+                # 다음 페이지로 이동
+                if current_page < max_pages:
+                    if self.go_to_next_page(current_page):
+                        current_page += 1
+                    else:
+                        print("Failed to navigate to next page. Stopping.")
+                        break
+                else:
+                    break
+            
+            print(f"\nCrawling completed! Total pages crawled: {current_page}")
             
         except KeyboardInterrupt:
-            print("\nCrawling interrupted by user. Saving progress...")
-            # Save current data and checkpoint
-            self.save_to_csv("job_data.csv")
+            print("\nCrawling interrupted by user.")
+            self.save_to_csv()
             self.save_checkpoint()
-            print("Progress saved. You can resume later from this point.")
+            print("Progress saved.")
             
         except Exception as e:
-            print(f"Error during scraping process: {e}")
-            # Save whatever data we've collected so far
-            self.save_to_csv("job_data.csv")
-            # Make sure the checkpoint is saved
+            print(f"Error during crawling: {e}")
+            self.save_to_csv()
             self.save_checkpoint()
-            print("Saved checkpoint. You can resume from this point later.")
             
         finally:
             self.close()
+    
+    def close(self):
+        """브라우저 종료"""
+        try:
+            if hasattr(self, 'driver'):
+                self.driver.quit()
+                print("Browser closed.")
+        except:
+            pass
 
-
-
-# Run the crawler
+# 실행
 if __name__ == "__main__":
-    # The URL for job listings
     url = 'https://www.work24.go.kr/wk/a/b/1200/retriveDtlEmpSrchList.do?basicSetupYn=&careerTo=&keywordJobCd=&occupation=&seqNo=&cloDateEndtParam=&payGbn=&templateInfo=&rot2WorkYn=&shsyWorkSecd=&resultCnt=10&keywordJobCont=&cert=&moreButtonYn=Y&minPay=&codeDepth2Info=11000&currentPageNo=1&eventNo=&mode=&major=&resrDutyExcYn=&eodwYn=&sortField=DATE&staArea=&sortOrderBy=DESC&keyword=&termSearchGbn=&carrEssYns=&benefitSrchAndOr=O&disableEmpHopeGbn=&actServExcYn=&keywordStaAreaNm=&maxPay=&regionParam=11000&emailApplyYn=&codeDepth1Info=11000&keywordEtcYn=&regDateStdtParam=&publDutyExcYn=&keywordJobCdSeqNo=&viewType=&exJobsCd=&templateDepthNmInfo=&region=11000&employGbn=&empTpGbcd=&computerPreferential=&infaYn=&cloDateStdtParam=&siteClcd=all&searchMode=Y&birthFromYY=&indArea=&careerTypes=&subEmpHopeYn=&tlmgYn=&academicGbn=&templateDepthNoInfo=&foriegn=&entryRoute=&mealOfferClcd=&basicSetupYnChk=&station=&holidayGbn=&srcKeyword=&academicGbnoEdu=noEdu&enterPriseGbn=&cloTermSearchGbn=&birthToYY=&keywordWantedTitle=&stationNm=&benefitGbn=&keywordFlag=&notSrcKeyword=&essCertChk=&depth2SelCode=&keywordBusiNm=&preferentialGbn=&rot3WorkYn=&regDateEndtParam=&pfMatterPreferential=B&pageIndex=1&termContractMmcnt=&careerFrom=&laborHrShortYn=#scrollLoc'
+    
     crawler = WorkGoKrCrawler(headless=False)
-    crawler.run(url, max_pages=100)  # Crawl up to 30 pages
+    crawler.run(url, max_pages=100)

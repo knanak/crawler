@@ -83,17 +83,99 @@ class WorkGoKrCrawler:
         # 체크포인트 설정
         self.checkpoint_file = checkpoint_file
         self.checkpoint = {
-            "current_page": 1,
-            "current_list_index": 0,
-            "last_processed_job_id": "",
             "last_url": "",
-            "timestamp": ""
+            "timestamp": "",
+            "First_title": "",
+            "Last_title": ""
         }
+        
+        # 현재 세션의 시작 시간 (새로운 CSV 파일명에 사용)
+        self.session_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # 크롤링 중단 플래그
+        self.should_stop = False
+        
+        # 크롤링한 job 개수 카운터
+        self.job_count = 0
+        
+        # jobCategories 기반 키워드 매핑 딕셔너리
+        self.keyword_mapping = {
+            # 돌봄·간병 종사자
+            '돌봄·간병 종사자': ['요양보호사', '요양보호', '노인요양', '재가요양', '간병인', '간병', '간호조무사', '간호조무'],
+            
+            # 아이돌보미
+            '아이돌보미': ['베이비시터', '육아도우미', '산후도우미', '보육도우미', '아이돌봄', '가사도우미', '가정도우미', '가정부', '파출부'],
+            
+            # 시설·설비 관리원
+            '시설·설비 관리원': ['건물관리', '시설관리', '빌딩관리', '관리소장', '시설물관리', '건물보수', '시설보수', '영선', 
+                         '전기관리', '전기안전', '전기기사', '건축설비', '설비기술', '기계정비', '설비정비', '기계수리'],
+            
+            # 교육 종사자
+            '교육 종사자': ['방과후', '방과후교사', '특기교사', '강사', '교사', '시니어강사', '교육'],
+            
+            # 사회복지사
+            '사회복지사': ['사회복지사', '사회복지', '복지사'],
+            
+            # 환경미화원
+            '환경미화원': ['환경미화', '가로미화', '거리미화', '청소원', '청소', '미화원', '미화', '룸메이드', '하우스키퍼'],
+            
+            # 경비원
+            '경비원': ['경비원', '경비', '시설경비', '건물경비', '아파트경비', '보안요원', '경호원', '보안관', 
+                      '보안관제', 'cctv관제', '관제요원'],
+            
+            # 운전원
+            '운전원': ['버스운전', '시내버스', '마을버스', '통근버스', '관광버스', '택시운전', '개인택시', '법인택시',
+                     '배송운전', '배달', '택배', '납품운전', '화물운전', '승합차운전', '승합차', '봉고차'],
+            
+            # 서비스직 종사자
+            '서비스직 종사자': ['배식', '서빙', '홀서빙', '접객', '카운터', '음식서비스', '서비스', '단순서비스', 
+                           '조리사', '조리원', '급식조리', '주방장', '조리장', '주방보조', '조리보조', '급식보조', '주방도우미'],
+            
+            # 사무직원
+            '사무직원': ['사무', '행정', '사무원', '사서', '안내', '영업지원', '영업사무', '영업관리', 
+                       '품질관리', '품질검사', '검사원', '총무', '사감', '기숙사'],
+            
+            # 약국 사무원
+            '약국 사무원': ['약국사무', '약국', '의료사무', '보건', '의료지원', '병원지원'],
+            
+            # 도보 배달원
+            '도보 배달원': ['도보배달', '배달', '배송']
+        }
+        
+        # 기타 카테고리 (jobCategories에는 없지만 기존 데이터에 있는 것들)
+        self.other_categories = {
+            '건설 단순 종사원': ['건설현장', '건설단순', '건설일용', '노무', '잡부'],
+            '주차 관리원': ['주차관리', '주차안내', '주차요원'],
+            '방역원': ['방역', '소독', '방제', '해충퇴치'],
+            '산업 안전원': ['안전관리', '산업안전', '안전요원'],
+            '건설수주 영업원': ['건설영업', '건설수주'],
+            '미디어 콘텐츠 디자이너': ['디자이너', '콘텐츠', '미디어디자인']
+        }
+        
+        # 전체 키워드 매핑 합치기
+        self.all_keyword_mapping = {**self.keyword_mapping, **self.other_categories}
         
         # User agent 설정
         self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
             "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36'
         })
+    
+    def extract_category_from_employment_type(self, employment_type):
+        """EmploymentType에서 카테고리를 추출하는 함수"""
+        if pd.isna(employment_type) or employment_type == "" or employment_type == "Not found":
+            return None
+        
+        # 소문자로 변환하여 비교
+        employment_type_lower = employment_type.lower()
+        
+        # 각 카테고리의 키워드를 확인 (all_keyword_mapping 사용)
+        for category, keywords in self.all_keyword_mapping.items():
+            for keyword in keywords:
+                if keyword in employment_type_lower:
+                    return category
+        
+        # 매칭되는 카테고리가 없는 경우 None 반환
+        return None
     
     def navigate_to_url(self, url):
         """URL로 이동"""
@@ -107,21 +189,21 @@ class WorkGoKrCrawler:
         """job_data 초기화"""
         self.job_data = {
             "Id": "",
-            "JobTitle": "Not found",
-            "DateOfRegistration": "Not found",
-            "Deadline": "채용시까지",
-            "JobCategory": "Not found",
-            "ExperienceRequired": "Not found",
-            "EmploymentType": "Not found",
-            "Salary": "Not found",
-            "Address": "Not found",
+            "JobTitle": "",
+            "DateOfRegistration": "",
+            "Deadline": "",
+            "JobCategory": "",
+            "ExperienceRequired": "",
+            "EmploymentType": "",
+            "Salary": "",
+            "Address": "",
             "Category": "",
-            "WorkingHours": "Not found",
-            "CompanyName": "Not found",
-            "JobDescription": "Not found",
-            "ApplicationMethod": "Not found",
-            "Document": "Not found",
-            "Detail": "Not found"
+            "WorkingHours": "",
+            "CompanyName": "",
+            "JobDescription": "",
+            "ApplicationMethod": "",
+            "Document": "",
+            "Detail": ""
         }
     
     def extract_listing_data(self, list_num):
@@ -149,7 +231,13 @@ class WorkGoKrCrawler:
             # Date of Registration
             date_selector = f"#list{list_num} > td:nth-child(3) > p:nth-child(4)"
             date_element = self.driver.find_element(By.CSS_SELECTOR, date_selector)
-            self.job_data["DateOfRegistration"] = date_element.text.strip()
+            date_text = date_element.text.strip()
+            # '등록일 : ' 부분 제거
+            if '등록일 :' in date_text:
+                date_text = date_text.replace('등록일 :', '').strip()
+            elif '등록일:' in date_text:
+                date_text = date_text.replace('등록일:', '').strip()
+            self.job_data["DateOfRegistration"] = date_text
         except NoSuchElementException:
             pass
         
@@ -157,7 +245,13 @@ class WorkGoKrCrawler:
             # Deadline
             deadline_selector = f"#list{list_num} > td:nth-child(3) > p:nth-child(3)"
             deadline_element = self.driver.find_element(By.CSS_SELECTOR, deadline_selector)
-            self.job_data["Deadline"] = deadline_element.text.strip()
+            deadline_text = deadline_element.text.strip()
+            # '마감일 : ' 부분 제거
+            if '마감일 :' in deadline_text:
+                deadline_text = deadline_text.replace('마감일 :', '').strip()
+            elif '마감일:' in deadline_text:
+                deadline_text = deadline_text.replace('마감일:', '').strip()
+            self.job_data["Deadline"] = deadline_text
         except NoSuchElementException:
             pass
         
@@ -221,6 +315,14 @@ class WorkGoKrCrawler:
             emp_type_selector = "#tab-panel01 > div.box_table_wrap.write.mt16 > table > tbody > tr:nth-child(2) > td:nth-child(2)"
             emp_type_element = self.driver.find_element(By.CSS_SELECTOR, emp_type_selector)
             self.job_data["EmploymentType"] = emp_type_element.text.strip()
+            
+            # EmploymentType을 기반으로 JobCategory 자동 설정
+            if not self.job_data["JobCategory"]:
+                extracted_category = self.extract_category_from_employment_type(self.job_data["EmploymentType"])
+                if extracted_category:
+                    self.job_data["JobCategory"] = extracted_category
+                    print(f"Category extracted from EmploymentType: {extracted_category}")
+                    
         except NoSuchElementException:
             print("Employment type not found")
         
@@ -289,11 +391,31 @@ class WorkGoKrCrawler:
         """현재 페이지의 모든 job 크롤링"""
         page_jobs = []
         
+        # 첫 번째 job 제목 저장 (페이지 변경 확인용)
+        try:
+            first_job_title = self.driver.find_element(By.CSS_SELECTOR, "#list1 > td.al_left.pd24 > div > div:nth-child(2) > a").text
+            self.last_first_job_title = first_job_title
+        except:
+            pass
+        
         # 각 리스트 (1-10) 크롤링
         for list_num in range(1, 11):
             try:
                 # 리스트에서 기본 정보 추출
                 job_data = self.extract_listing_data(list_num)
+                
+                # 이번 크롤링의 첫 번째 job을 First_title로 설정 (최신 데이터)
+                if self.job_count == 0:
+                    self.checkpoint["First_title"] = job_data["JobTitle"]
+                    self.save_checkpoint()
+                    print(f"First_title set (newest job): {self.checkpoint['First_title']}")
+                
+                # Last_title(이전 크롤링의 첫 번째 job)과 비교하여 중단 여부 결정
+                if self.checkpoint["Last_title"] and job_data["JobTitle"] == self.checkpoint["Last_title"]:
+                    print(f"Found previous First_title (Last_title): {job_data['JobTitle']}")
+                    print("All new jobs have been crawled. Stopping.")
+                    self.should_stop = True
+                    break
                 
                 # job ID 생성
                 job_id = f"{job_data['JobTitle']}_{job_data['DateOfRegistration']}_{job_data['Deadline']}"
@@ -307,14 +429,15 @@ class WorkGoKrCrawler:
                 self.job_data = job_data
                 
                 # 상세 페이지 크롤링
-                if job_data["Detail"] != "Not found":
+                if job_data["Detail"]:
                     self.crawl_job_detail(job_data["Detail"])
                 
                 # 수집된 데이터 저장
                 page_jobs.append(self.job_data.copy())
                 self.processed_job_ids.add(job_id)
+                self.job_count += 1
                 
-                print(f"Successfully crawled job {list_num}: {self.job_data['JobTitle']}")
+                print(f"Successfully crawled job {list_num}: {self.job_data['JobTitle']} (Category: {self.job_data['JobCategory']})")
                 
             except Exception as e:
                 print(f"Error processing list {list_num}: {e}")
@@ -492,14 +615,33 @@ class WorkGoKrCrawler:
                 
             except:
                 return False
-            
-    def save_to_csv(self, filename="job_data.csv"):
+    
+    def save_to_csv(self, filename=None):
         """CSV 파일로 저장"""
         if not self.jobs:
             print("No jobs to save.")
             return
         
+        # 파일명이 지정되지 않은 경우 세션 시간을 사용한 새로운 파일명 생성
+        if filename is None:
+            filename = f"job_data_{self.session_time}.csv"
+        
         df_new = pd.DataFrame(self.jobs)
+        
+        # 카테고리별 통계 출력
+        print("\n=== Category Statistics ===")
+        category_counts = df_new['JobCategory'].value_counts()
+        print(category_counts.head(20))
+        
+        # jobCategories에 있는 카테고리만 필터링해서 확인
+        print("\njobCategories 카테고리별 개수:")
+        job_categories_list = list(self.keyword_mapping.keys())
+        for category in job_categories_list:
+            count = category_counts.get(category, 0)
+            print(f"{category}: {count}")
+        
+        print(f"\nTotal categories assigned: {df_new[df_new['JobCategory'] != '']['JobCategory'].count()}")
+        print(f"No category assigned: {df_new[df_new['JobCategory'] == '']['JobCategory'].count()}")
         
         if os.path.isfile(filename):
             try:
@@ -507,13 +649,13 @@ class WorkGoKrCrawler:
                 df_combined = pd.concat([df_existing, df_new], ignore_index=True)
                 df_combined = df_combined.drop_duplicates(subset=['JobTitle', 'CompanyName', 'Deadline'], keep='last')
                 df_combined.to_csv(filename, index=False, encoding='utf-8-sig', lineterminator='\n')
-                print(f"Appended {len(df_new)} jobs to {filename}. Total: {len(df_combined)} jobs")
+                print(f"\nAppended {len(df_new)} jobs to {filename}. Total: {len(df_combined)} jobs")
             except Exception as e:
                 print(f"Error appending to existing file: {e}")
                 df_new.to_csv(filename, index=False, encoding='utf-8-sig', lineterminator='\n')
         else:
             df_new.to_csv(filename, index=False, encoding='utf-8-sig', lineterminator='\n')
-            print(f"Created new file {filename} with {len(df_new)} jobs")
+            print(f"\nCreated new file {filename} with {len(df_new)} jobs")
         
         self.jobs = []
     
@@ -526,20 +668,38 @@ class WorkGoKrCrawler:
             with open(self.checkpoint_file, 'w', encoding='utf-8') as f:
                 json.dump(checkpoint_data, f, ensure_ascii=False, indent=2)
                 
-            print(f"Checkpoint saved at page {self.checkpoint['current_page']}")
+            print(f"Checkpoint saved")
         except Exception as e:
             print(f"Error saving checkpoint: {e}")
     
     def load_checkpoint(self):
         """체크포인트 로드"""
         if not os.path.exists(self.checkpoint_file):
-            print("No checkpoint file found")
+            print("No checkpoint file found. This is the first crawl.")
             return False
         
         try:
             with open(self.checkpoint_file, 'r', encoding='utf-8') as f:
-                self.checkpoint = json.load(f)
-            print(f"Loaded checkpoint: Page {self.checkpoint['current_page']}")
+                loaded_checkpoint = json.load(f)
+            
+            # First_title이 있고 Last_title이 없는 경우 (이전 크롤링 완료)
+            if "First_title" in loaded_checkpoint and loaded_checkpoint["First_title"] and not loaded_checkpoint.get("Last_title"):
+                self.checkpoint["Last_title"] = loaded_checkpoint["First_title"]
+                print(f"Set Last_title from previous First_title: {self.checkpoint['Last_title']}")
+                
+                # 체크포인트 파일 업데이트
+                self.checkpoint["First_title"] = ""
+                self.save_checkpoint()
+                
+            # Last_title이 이미 있는 경우
+            elif "Last_title" in loaded_checkpoint and loaded_checkpoint["Last_title"]:
+                self.checkpoint["Last_title"] = loaded_checkpoint["Last_title"]
+                print(f"Loaded existing Last_title: {self.checkpoint['Last_title']}")
+            
+            else:
+                print("No Last_title found. Will crawl all jobs.")
+            
+            print(f"Checkpoint loaded successfully")
             return True
         except Exception as e:
             print(f"Error loading checkpoint: {e}")
@@ -548,39 +708,17 @@ class WorkGoKrCrawler:
     def run(self, start_url, max_pages=100):
         """메인 크롤링 실행"""
         # 체크포인트 로드
-        checkpoint_exists = self.load_checkpoint()
-        
-        # 기존 CSV에서 ID 카운터 초기화
-        if os.path.exists("job_data.csv"):
-            try:
-                df_existing = pd.read_csv("job_data.csv", encoding='utf-8-sig')
-                if not df_existing.empty and 'Id' in df_existing.columns:
-                    self.id_counter = int(df_existing['Id'].max()) + 1
-                    print(f"Starting ID counter from: {self.id_counter}")
-            except:
-                pass
+        self.load_checkpoint()
         
         try:
             # 시작 URL로 이동
             self.navigate_to_url(start_url)
             
-            # 체크포인트가 있으면 해당 페이지로 이동
-            if checkpoint_exists and self.checkpoint["current_page"] > 1:
-                print(f"Resuming from page {self.checkpoint['current_page']}")
-                # 해당 페이지까지 이동
-                for page in range(1, self.checkpoint["current_page"]):
-                    self.go_to_next_page(page)
-                current_page = self.checkpoint["current_page"]
-            else:
-                current_page = 1
+            current_page = 1
             
             # 페이지별 크롤링
-            while current_page <= max_pages:
+            while current_page <= max_pages and not self.should_stop:
                 print(f"\n=== Crawling page {current_page} ===")
-                
-                # 현재 페이지 체크포인트 업데이트
-                self.checkpoint["current_page"] = current_page
-                self.save_checkpoint()
                 
                 # 현재 페이지의 모든 job 크롤링
                 page_jobs = self.crawl_page_jobs()
@@ -590,6 +728,19 @@ class WorkGoKrCrawler:
                 self.save_to_csv()
                 
                 print(f"Page {current_page} completed. Collected {len(page_jobs)} jobs")
+                
+                # 중단 플래그 확인
+                if self.should_stop:
+                    print("\n=== Crawling completed ===")
+                    print(f"Total new jobs collected: {self.job_count}")
+                    
+                    # 크롤링 완료 후 First_title을 Last_title로 업데이트
+                    if self.checkpoint["First_title"]:
+                        self.checkpoint["Last_title"] = self.checkpoint["First_title"]
+                        self.checkpoint["First_title"] = ""  # 다음 크롤링을 위해 초기화
+                        self.save_checkpoint()
+                        print(f"Updated Last_title for next crawl: {self.checkpoint['Last_title']}")
+                    break
                 
                 # 다음 페이지로 이동
                 if current_page < max_pages:
